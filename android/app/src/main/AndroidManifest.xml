@@ -1,14 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     
     <!-- TV 必需权限 -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     
-    <!-- 声明 TV 硬件支持 -->
+    <!-- 声明 TV 硬件支持（电视必须支持 Leanback，触摸屏可选） -->
     <uses-feature android:name="android.software.leanback" android:required="false"/>
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
     
@@ -16,10 +13,11 @@
         android:label="Kazumi TV"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:banner="@drawable/ic_banner"  <!-- TV 桌面横幅 -->
+        android:banner="@drawable/ic_banner"
         android:usesCleartextTraffic="true"
         android:enableOnBackInvokedCallback="true">
         
+        <!-- TV 主 Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -28,15 +26,17 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize"
-            android:screenOrientation="landscape">  <!-- TV 强制横屏 -->
+            android:screenOrientation="landscape">
             
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
+                <!-- 同时支持手机和 TV 启动器 -->
                 <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>  <!-- TV 启动器 -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
             </intent-filter>
         </activity>
         
+        <!-- Flutter 引擎配置 -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
