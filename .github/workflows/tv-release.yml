@@ -35,8 +35,8 @@ jobs:
         run: |
           flutter build apk \
             --target-platform=android-arm \
-            --release \
-            --split-per-abi
+            --release
+          # 注意：删除了 --split-per-abi
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
