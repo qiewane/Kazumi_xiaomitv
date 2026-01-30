@@ -36,6 +36,16 @@ class GStorage {
     searchHistory = await Hive.openBox('searchHistory');
   }
 
+  // TV 适配：获取是否为 TV 设备
+  static bool get isTVDevice {
+    return setting.get(SettingBoxKey.isTV, defaultValue: false);
+  }
+
+  // TV 适配：设置 TV 设备标记
+  static Future<void> setTVDevice(bool value) async {
+    await setting.put(SettingBoxKey.isTV, value);
+  }
+
   static Future<void> backupBox(String boxName, String backupFilePath) async {
     final appDocumentDir = await getApplicationSupportDirectory();
     final hiveBoxFile = File('${appDocumentDir.path}/hive/$boxName.hive');
@@ -271,5 +281,7 @@ class SettingBoxKey {
       proxyEnable = 'proxyEnable',
       proxyConfigured = 'proxyConfigured',
       proxyUrl = 'proxyUrl',
-      showRating = 'showRating';
+      showRating = 'showRating',
+      // TV 适配：TV 设备标记
+      isTV = 'isTV';
 }
