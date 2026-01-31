@@ -37,17 +37,6 @@ jobs:
           sudo apt-get update && sudo apt-get install -y imagemagick
           mkdir -p android/app/src/main/res/drawable-xhdpi
           convert assets/images/logo/logo_android.png -resize 320x180! android/app/src/main/res/drawable-xhdpi/ic_banner.png
-
-      - name: Fix AndroidManifest.xml
-        run: |
-          # 删除可能的特殊字符
-          sed -i 's/android"\\s*/android"/g' android/app/src/main/AndroidManifest.xml
-          sed -i 's/\\r$//' android/app/src/main/AndroidManifest.xml
-          # 验证文件
-          cat android/app/src/main/AndroidManifest.xml | head -5
-      
-      - name: Build armeabi-v7a APK
-        run: flutter build apk --target-platform=android-arm --release
       
       - name: Build armeabi-v7a APK
         run: flutter build apk --target-platform=android-arm --release
@@ -68,9 +57,8 @@ jobs:
           body: |
             ## TV 版更新
             - 适配 armeabi-v7a 架构（小米电视等 32 位设备）
-            - 支持遥控器焦点导航
-            - 主页左侧菜单支持方向键操作
-            - 播放页下键打开菜单，左右键快进快退
-            - 适配小米电视输入法
+            - **强制 TV 模式**（自动适配遥控器导航）
+            - 支持方向键操作
+            - 修复 Hive 初始化问题
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
