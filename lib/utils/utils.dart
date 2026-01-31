@@ -1,59 +1,61 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:kazumi/request/api.dart';
+import 'package:kazumi/utils/constants.dart';
+import 'package:kazumi/utils/logger.dart';
+import 'package:kazumi/utils/mortis.dart';
 import 'package:kazumi/utils/storage.dart';
+import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:screen_brightness/screen_brightness.dart';
-import 'package:volume_controller/volume_controller.dart';
+import 'package:window_manager/window_manager.dart';
+import 'package:flutter_inappwebview_platform_interface/flutter_inappwebview_platform_interface.dart';
 
 class Utils {
-  static final Random _random = Random();
+  static final Random random = Random();
 
-  /// 检查是否为桌面端
-  static bool isDesktop() {
-    return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  static bool? _isDocumentStartScriptSupported;
+
+  /// 检查 Android WebView 是否支持 DOCUMENT_START_SCRIPT 特性
+  static Future<void> checkWebViewFeatureSupport() async {
+    if (Platform.isAndroid) {
+      _isDocumentStartScriptSupported = await PlatformWebViewFeature.static()
+          .isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
+    }
   }
 
-  /// 检查是否为移动设备
-  static bool isMobile() {
-    return Platform.isAndroid || Platform.isIOS;
-  }
+  static bool get isDocumentStartScriptSupported =>
+      _isDocumentStartScriptSupported ?? false;
 
-  /// TV 设备检测
+  // ================== TV 适配新增方法开始 ==================
+  
+  /// 检测是否为 TV 设备
   /// 优先从存储读取，未设置则通过屏幕尺寸判断
   static bool isTV() {
-    // 优先读取存储的标记（在 main.dart 初始化时设置）
+    // 优先读取存储的标记
     try {
-      final storedValue = GStorage.isTVDevice;
-      if (storedValue) return true;
+      final storedValue = GStorage.getSetting(SettingBoxKey.isTV, defaultValue: false);
+      if (storedValue == true) return true;
     } catch (e) {
-      // 如果存储未初始化，继续检测
+      // 存储未初始化，继续检测
     }
 
     if (!Platform.isAndroid) return false;
     
     try {
-      // 获取屏幕信息
       final view = WidgetsBinding.instance.platformDispatcher.views.first;
       final data = MediaQueryData.fromView(view);
       final size = data.size;
-      final pixelRatio = data.devicePixelRatio;
       
-      // 计算物理尺寸（英寸），160dpi 为 Android 基准密度
-      final widthInches = size.width / pixelRatio / 160;
-      final heightInches = size.height / pixelRatio / 160;
-      final diagonalInches = sqrt(widthInches * widthInches + heightInches * heightInches);
-      
-      // TV 判断逻辑：对角线大于 10 英寸且为横屏，或短边大于 600 逻辑像素
-      final isLargeScreen = diagonalInches > 10.0 || size.shortestSide > 600;
-      final isLandscape = size.width > size.height;
-      
-      return isLargeScreen && isLandscape;
+      // TV 判断：短边大于 600 逻辑像素且为横屏
+      return size.shortestSide > 600 && size.width > size.height;
     } catch (e) {
       return false;
     }
@@ -62,7 +64,7 @@ class Utils {
   /// 强制检测 TV 并保存结果（在 main.dart 初始化时调用）
   static Future<bool> detectTVDevice() async {
     if (!Platform.isAndroid) {
-      await GStorage.setTVDevice(false);
+      await GStorage.setSetting(SettingBoxKey.isTV, false);
       return false;
     }
     
@@ -72,222 +74,539 @@ class Utils {
       final data = MediaQueryData.fromView(view);
       final size = data.size;
       
-      // TV 判断：短边大于 600 逻辑像素且为横屏
       isTVDevice = size.shortestSide > 600 && size.width > size.height;
-      
-      // 保存检测结果到 Hive
-      await GStorage.setTVDevice(isTVDevice);
+      await GStorage.setSetting(SettingBoxKey.isTV, isTVDevice);
     } catch (e) {
       isTVDevice = false;
-      await GStorage.setTVDevice(false);
+      await GStorage.setSetting(SettingBoxKey.isTV, false);
     }
     
     return isTVDevice;
   }
 
-  /// 检查 WebView 功能支持（Android）
-  static Future<void> checkWebViewFeatureSupport() async {
-    // 原有实现保留
-    if (!Platform.isAndroid) return;
-    // TODO: 实现 WebView 检查逻辑
-  }
+  // ================== TV 适配新增方法结束 ==================
 
-  /// 检查是否为低分辨率屏幕（TV 和老设备适配）
   static Future<bool> isLowResolution() async {
-    try {
-      final view = WidgetsBinding.instance.platformDispatcher.views.first;
-      final data = MediaQueryData.fromView(view);
-      // 低于 720p 认为是低分辨率
-      return data.size.width < 1280 || data.size.height < 720;
-    } catch (e) {
+    if (Platform.isMacOS) {
       return false;
     }
-  }
-
-  /// 获取应用版本信息
-  static Future<String> getAppVersion() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    return '${packageInfo.version}+${packageInfo.buildNumber}';
-  }
-
-  /// 获取设备信息（TV 调试使用）
-  static Future<Map<String, dynamic>> getDeviceInfo() async {
-    final deviceInfo = DeviceInfoPlugin();
-    final Map<String, dynamic> info = {};
-    
-    if (Platform.isAndroid) {
-      final androidInfo = await deviceInfo.androidInfo;
-      info['model'] = androidInfo.model;
-      info['brand'] = androidInfo.brand;
-      info['version'] = androidInfo.version.release;
-      info['sdk'] = androidInfo.version.sdkInt;
-      info['isTV'] = isTV();
-    } else if (Platform.isIOS) {
-      final iosInfo = await deviceInfo.iosInfo;
-      info['model'] = iosInfo.model;
-      info['system'] = iosInfo.systemVersion;
-    } else {
-      info['platform'] = Platform.operatingSystem;
-      info['version'] = Platform.operatingSystemVersion;
+    Map<String, double> screenInfo = await getScreenInfo();
+    if (screenInfo['height']! / screenInfo['ratio']! < 900) {
+      return true;
     }
-    
-    return info;
+    return false;
   }
 
-  /// 调整屏幕亮度（TV 播放器使用）
-  static Future<void> setBrightness(double brightness) async {
-    try {
-      await ScreenBrightness.instance.setScreenBrightness(brightness.clamp(0.0, 1.0));
-    } catch (e) {
-      debugPrint('设置亮度失败: $e');
-    }
+  static String getRandomUA() {
+    final random = Random();
+    String randomElement =
+        userAgentsList[random.nextInt(userAgentsList.length)];
+    return randomElement;
   }
 
-  /// 获取当前亮度
-  static Future<double> getBrightness() async {
-    try {
-      return await ScreenBrightness.instance.current;
-    } catch (e) {
-      return 1.0;
-    }
+  static String getRandomAcceptedLanguage() {
+    final random = Random();
+    String randomElement =
+        acceptLanguageList[random.nextInt(acceptLanguageList.length)];
+    return randomElement;
   }
 
-  /// 设置系统音量（TV 播放器使用）
-  static void setVolume(double volume) {
-    VolumeController.instance.setVolume(volume.clamp(0.0, 1.0));
-  }
-
-  /// 获取当前音量
-  static Future<double> getVolume() async {
-    try {
-      return await VolumeController.instance.getVolume();
-    } catch (e) {
-      return 1.0;
-    }
-  }
-
-  /// 显示音量/亮度调节 UI（TV 优化版 - 更大的显示尺寸）
-  static void showVolumeIndicator(BuildContext context, double value, String label) {
-    final isTV = Utils.isTV();
-    final double fontSize = isTV ? 32.0 : 20.0;
-    final double iconSize = isTV ? 48.0 : 32.0;
-    final double padding = isTV ? 32.0 : 16.0;
-    
-    // 这里可以触发一个 Overlay 或通知 BLoC 显示调节界面
-    debugPrint('[$label] ${(value * 100).toInt()}% (TV: $isTV)');
-  }
-
-  /// 生成随机字符串
-  static String generateRandomString(int length) {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    return String.fromCharCodes(Iterable.generate(
-      length,
-      (_) => chars.codeUnitAt(_random.nextInt(chars.length)),
-    ));
-  }
-
-  /// 格式化时间（秒 -> HH:MM:SS），播放器使用
-  static String formatDuration(int seconds) {
-    final duration = Duration(seconds: seconds);
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    if (duration.inHours > 0) {
-      return '${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds';
-    }
-    return '$twoDigitMinutes:$twoDigitSeconds';
-  }
-
-  /// 格式化文件大小
-  static String formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-  }
-
-  /// 清除缓存目录
-  static Future<void> clearCache() async {
-    final cacheDir = await getTemporaryDirectory();
-    if (cacheDir.existsSync()) {
-      await cacheDir.delete(recursive: true);
-    }
-  }
-
-  /// 获取缓存大小
-  static Future<int> getCacheSize() async {
-    final cacheDir = await getTemporaryDirectory();
-    if (!cacheDir.existsSync()) return 0;
-    
-    int totalSize = 0;
-    await for (final file in cacheDir.list(recursive: true, followLinks: false)) {
-      if (file is File) {
-        totalSize += await file.length();
-      }
-    }
-    return totalSize;
-  }
-
-  /// 安全解析 JSON
-  static dynamic safeJsonDecode(String source) {
-    try {
-      return jsonDecode(source);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// 复制到剪贴板
-  static Future<void> copyToClipboard(String text) async {
-    await Clipboard.setData(ClipboardData(text: text));
-  }
-
-  /// 从剪贴板粘贴
-  static Future<String?> pasteFromClipboard() async {
-    final data = await Clipboard.getData('text/plain');
-    return data?.text;
-  }
-
-  /// 检查 URL 是否有效
-  static bool isValidUrl(String url) {
-    return Uri.tryParse(url)?.hasAbsolutePath ?? false;
-  }
-
-  /// 防抖函数（TV 遥控器按键优化，防止重复触发）
-  static VoidCallback debounce(VoidCallback action, Duration duration) {
-    Timer? timer;
-    return () {
-      timer?.cancel();
-      timer = Timer(duration, action);
+  static Future<Map<String, double>> getScreenInfo() async {
+    final MediaQueryData mediaQuery = MediaQueryData.fromView(
+        WidgetsBinding.instance.platformDispatcher.views.first);
+    final Size screenSize =
+        WidgetsBinding.instance.platformDispatcher.displays.first.size;
+    final double screenRatio = mediaQuery.devicePixelRatio;
+    Map<String, double>? screenInfo = {};
+    screenInfo = {
+      'width': screenSize.width,
+      'height': screenSize.height,
+      'ratio': screenRatio
     };
+    return screenInfo;
   }
 
-  /// 节流函数（TV 遥控器按键优化，限制触发频率）
-  static VoidCallback throttle(VoidCallback action, Duration duration) {
-    DateTime? lastAction;
-    return () {
-      if (lastAction != null && DateTime.now().difference(lastAction!) < duration) {
+  // 从URL参数中解析 m3u8/mp4
+  static String decodeVideoSource(String iframeUrl) {
+    var decodedUrl = Uri.decodeFull(iframeUrl);
+    RegExp regExp = RegExp(r'(http[s]?://.*?\.m3u8)|(http[s]?://.*?\.mp4)',
+        caseSensitive: false);
+
+    Uri uri = Uri.parse(decodedUrl);
+    Map<String, String> params = uri.queryParameters;
+
+    String matchedUrl = iframeUrl;
+    params.forEach((key, value) {
+      if (regExp.hasMatch(value)) {
+        matchedUrl = value;
         return;
       }
-      lastAction = DateTime.now();
-      action();
-    };
+    });
+
+    return Uri.encodeFull(matchedUrl);
   }
 
-  /// 获取适配屏幕的间距（TV 需要更大的间距便于遥控器导航）
-  static double getAdaptivePadding(BuildContext context) {
-    return isTV() ? 24.0 : 16.0;
+  // 完全相对时间显示
+  static String formatTimestampToRelativeTime(timeStamp) {
+    var difference = DateTime.now()
+        .difference(DateTime.fromMillisecondsSinceEpoch(timeStamp * 1000));
+
+    if (difference.inDays > 365) {
+      return '${difference.inDays ~/ 365}年前';
+    } else if (difference.inDays > 30) {
+      return '${difference.inDays ~/ 30}个月前';
+    } else if (difference.inDays > 0) {
+      return '${difference.inDays}天前';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}小时前';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}分钟前';
+    } else {
+      return '刚刚';
+    }
   }
 
-  /// 获取适配屏幕的字体大小（TV 需要更大的字体）
-  static double getAdaptiveFontSize(BuildContext context, double baseSize) {
-    return isTV() ? baseSize * 1.25 : baseSize;
+  // 时间显示，刚刚，x分钟前
+  static String dateFormat(timeStamp, {formatType = 'list'}) {
+    int time = (DateTime.now().millisecondsSinceEpoch / 1000).round();
+    int distance = (time - timeStamp).toInt();
+    String currentYearStr = 'MM月DD日 hh:mm';
+    String lastYearStr = 'YY年MM月DD日 hh:mm';
+    if (formatType == 'detail') {
+      currentYearStr = 'MM-DD hh:mm';
+      lastYearStr = 'YY-MM-DD hh:mm';
+      return CustomStamp_str(
+          timestamp: timeStamp,
+          date: lastYearStr,
+          toInt: false,
+          formatType: formatType);
+    }
+    if (distance <= 60) {
+      return '刚刚';
+    } else if (distance <= 3600) {
+      return '${(distance / 60).floor()}分钟前';
+    } else if (distance <= 43200) {
+      return '${(distance / 60 / 60).floor()}小时前';
+    } else if (DateTime.fromMillisecondsSinceEpoch(time * 1000).year ==
+        DateTime.fromMillisecondsSinceEpoch(timeStamp * 1000).year) {
+      return CustomStamp_str(
+          timestamp: timeStamp,
+          date: currentYearStr,
+          toInt: false,
+          formatType: formatType);
+    } else {
+      return CustomStamp_str(
+          timestamp: timeStamp,
+          date: lastYearStr,
+          toInt: false,
+          formatType: formatType);
+    }
   }
 
-  /// 判断是否需要显示 TV 专属 UI
-  static bool shouldShowTVUI() {
-    return isTV();
+  // 时间戳转时间
+  static String CustomStamp_str(
+      {int? timestamp,
+      String? date,
+      bool toInt = true,
+      String? formatType}) {
+    timestamp ??= (DateTime.now().millisecondsSinceEpoch / 1000).round();
+    String timeStr =
+        (DateTime.fromMillisecondsSinceEpoch(timestamp * 1000)).toString();
+
+    dynamic dateArr = timeStr.split(' ')[0];
+    dynamic timeArr = timeStr.split(' ')[1];
+
+    String YY = dateArr.split('-')[0];
+    String MM = dateArr.split('-')[1];
+    String DD = dateArr.split('-')[2];
+
+    String hh = timeArr.split(':')[0];
+    String mm = timeArr.split(':')[1];
+    String ss = timeArr.split(':')[2];
+
+    ss = ss.split('.')[0];
+
+    if (toInt) {
+      MM = (int.parse(MM)).toString();
+      DD = (int.parse(DD)).toString();
+      hh = (int.parse(hh)).toString();
+      mm = (int.parse(mm)).toString();
+    }
+
+    if (date == null) {
+      return timeStr;
+    }
+
+    date = date
+        .replaceAll('YY', YY)
+        .replaceAll('MM', MM)
+        .replaceAll('DD', DD)
+        .replaceAll('hh', hh)
+        .replaceAll('mm', mm)
+        .replaceAll('ss', ss);
+    if (int.parse(YY) == DateTime.now().year &&
+        int.parse(MM) == DateTime.now().month) {
+      if (int.parse(DD) == DateTime.now().day) {
+        return '今天';
+      }
+    }
+    return date;
+  }
+
+  static String makeHeroTag(v) {
+    return v.toString() + random.nextInt(9999).toString();
+  }
+
+  // 版本对比
+  static bool needUpdate(localVersion, remoteVersion) {
+    List<String> localVersionList = localVersion.split('.');
+    List<String> remoteVersionList = remoteVersion.split('.');
+    for (int i = 0; i < localVersionList.length; i++) {
+      int localVersion = int.parse(localVersionList[i]);
+      int remoteVersion = int.parse(remoteVersionList[i]);
+      if (remoteVersion > localVersion) {
+        return true;
+      } else if (remoteVersion < localVersion) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  // 日期字符串转换为 weekday (eg: 2024-09-23 -> 1 (星期一))
+  static int dateStringToWeekday(String dateString) {
+    try {
+      DateTime date = DateTime.parse(dateString);
+      return date.weekday;
+    } catch (_) {
+      return 1;
+    }
+  }
+
+  static String jsonToKazumiBase64(String jsonStr) {
+    String base64Str = base64Encode(utf8.encode(jsonStr));
+    return 'kazumi://$base64Str';
+  }
+
+  static String kazumiBase64ToJson(String kazumiBase64Str) {
+    if (!kazumiBase64Str.startsWith('kazumi://')) {
+      return '';
+    }
+    String base64Str = kazumiBase64Str.substring(9);
+    String jsonStr = utf8.decode(base64.decode(base64Str));
+    return jsonStr;
+  }
+
+  static String durationToString(Duration duration) {
+    String pad(int n) => n.toString().padLeft(2, '0');
+    var hours = pad(duration.inHours % 24);
+    var minutes = pad(duration.inMinutes % 60);
+    var seconds = pad(duration.inSeconds % 60);
+    if (hours == "00") {
+      return "$minutes:$seconds";
+    } else {
+      return "$hours:$minutes:$seconds";
+    }
+  }
+
+  static Future<String> latest() async {
+    try {
+      var resp = await Dio().get<Map<String, dynamic>>(Api.latestApp);
+      if (resp.data?.containsKey("tag_name") ?? false) {
+        return resp.data!["tag_name"];
+      } else {
+        throw resp.data?["message"];
+      }
+    } catch (e) {
+      return Api.version;
+    }
+  }
+
+  static oledDarkTheme(ThemeData defaultDarkTheme) {
+    return defaultDarkTheme.copyWith(
+      scaffoldBackgroundColor: Colors.black,
+      colorScheme: defaultDarkTheme.colorScheme.copyWith(
+        onPrimary: Colors.black,
+        onSecondary: Colors.black,
+        surface: Colors.black,
+        onSurface: Colors.white,
+      ),
+    );
+  }
+
+  static generateDanmakuColor(int colorValue) {
+    int red = (colorValue >> 16) & 0xFF;
+    int green = (colorValue >> 8) & 0xFF;
+    int blue = colorValue & 0xFF;
+    Color color = Color.fromARGB(255, red, green, blue);
+    return color;
+  }
+
+  static int extractEpisodeNumber(String input) {
+    RegExp regExp = RegExp(r'第?(\d+)[话集]?');
+    Match? match = regExp.firstMatch(input);
+
+    if (match != null && match.group(1) != null) {
+      return int.tryParse(match.group(1)!) ?? 0;
+    }
+
+    return 0;
+  }
+
+  /// 判断是否为桌面设备
+  static bool isDesktop() {
+    return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+  }
+
+  /// 判断设备是否为宽屏
+  static bool isWideScreen() {
+    final MediaQueryData mediaQuery = MediaQueryData.fromView(
+        WidgetsBinding.instance.platformDispatcher.views.first);
+    final bool isWideScreen = mediaQuery.size.shortestSide >= 600 &&
+        mediaQuery.size.shortestSide / mediaQuery.size.longestSide >= 9 / 16;
+    return isWideScreen;
+  }
+
+  /// 判断设备是否为平板
+  static bool isTablet() {
+    return isWideScreen() && !isDesktop();
+  }
+
+  /// 判断设备是否需要紧凑布局
+  static bool isCompact() {
+    return !isDesktop() && !isWideScreen();
+  }
+
+  /// 判断是否分屏模式 (android only)
+  static Future<bool> isInMultiWindowMode() async {
+    if (Platform.isAndroid) {
+      const platform = MethodChannel('com.predidit.kazumi/intent');
+      try {
+        final bool result =
+            await platform.invokeMethod('checkIfInMultiWindowMode');
+        return result;
+      } on PlatformException catch (e) {
+        print("Failed to check multi window mode: '${e.message}'.");
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /// 判定是否运行在X11环境下 (Linux only)
+  static Future<bool> isRunningOnX11() async {
+    if (Platform.isLinux) {
+      const platform = MethodChannel('com.predidit.kazumi/intent');
+      try {
+        final bool result = await platform.invokeMethod('isRunningOnX11');
+        return result;
+      } on PlatformException catch (e) {
+        print("Failed to check X11 environment: '${e.message}'.");
+        return false;
+      }
+    }
+    return false;
+  }
+
+  // 进入全屏显示
+  static Future<void> enterFullScreen({bool lockOrientation = true}) async {
+    if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+      await windowManager.setFullScreen(true);
+      return;
+    }
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.immersiveSticky,
+    );
+    if (!lockOrientation) {
+      return;
+    }
+    if (Platform.isAndroid) {
+      bool isInMultiWindowMode = await Utils.isInMultiWindowMode();
+      if (isInMultiWindowMode) {
+        return;
+      }
+    }
+    await landScape();
+  }
+
+  static Future<int> getAndroidSdkVersion() async {
+    if (Platform.isAndroid) {
+      const platform = MethodChannel('com.predidit.kazumi/intent');
+      try {
+        final int sdkVersion =
+            await platform.invokeMethod('getAndroidSdkVersion');
+        return sdkVersion;
+      } on PlatformException catch (e) {
+        KazumiLogger().e("Failed to get Android SDK version: '${e.message}'.");
+        return 0;
+      }
+    }
+    return 0;
+  }
+
+  //退出全屏显示
+  static Future<void> exitFullScreen({bool lockOrientation = true}) async {
+    if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+      await windowManager.setFullScreen(false);
+    }
+    late SystemUiMode mode = SystemUiMode.edgeToEdge;
+    try {
+      if (Platform.isAndroid || Platform.isIOS) {
+        if (Platform.isAndroid) {
+          const platform = MethodChannel('com.predidit.kazumi/intent');
+          try {
+            final int sdkVersion =
+                await platform.invokeMethod('getAndroidSdkVersion');
+            if (sdkVersion < 29) {
+              mode = SystemUiMode.manual;
+            }
+          } on PlatformException catch (e) {
+            KazumiLogger()
+                .e("Failed to get Android SDK version: '${e.message}'.");
+          }
+        }
+        await SystemChrome.setEnabledSystemUIMode(
+          mode,
+          overlays: SystemUiOverlay.values,
+        );
+        if (Utils.isCompact() && lockOrientation) {
+          if (Platform.isAndroid) {
+            bool isInMultiWindowMode = await Utils.isInMultiWindowMode();
+            if (isInMultiWindowMode) {
+              return;
+            }
+          }
+          verticalScreen();
+        }
+      }
+    } catch (exception, stacktrace) {
+      KazumiLogger().e('DisPlay: failed to exit full screen',
+          error: exception, stackTrace: stacktrace);
+    }
+  }
+
+  //横屏
+  static Future<void> landScape() async {
+    dynamic document;
+    try {
+      if (kIsWeb) {
+        await document.documentElement?.requestFullscreen();
+      } else if (Platform.isAndroid || Platform.isIOS) {
+        await SystemChrome.setPreferredOrientations(
+          [
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ],
+        );
+      }
+    } catch (exception, stacktrace) {
+      KazumiLogger().e('Display: failed to enter landscape mode',
+          error: exception, stackTrace: stacktrace);
+    }
+  }
+
+  //竖屏
+  static Future<void> verticalScreen() async {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+  }
+
+  // 解除屏幕旋转限制
+  static Future<void> unlockScreenRotation() async {
+    await SystemChrome.setPreferredOrientations([]);
+  }
+
+  static String getSeasonStringByMonth(int month) {
+    if (month <= 3) return '冬';
+    if (month <= 6) return '春';
+    if (month <= 9) return '夏';
+    return '秋';
+  }
+
+  // 进入桌面设备小窗模式
+  static Future<void> enterDesktopPIPWindow() async {
+    await windowManager.setAlwaysOnTop(true);
+    await windowManager.setSize(const Size(480, 270));
+  }
+
+  // 退出桌面设备小窗模式
+  static Future<void> exitDesktopPIPWindow() async {
+    bool isLowResolution = await Utils.isLowResolution();
+    await windowManager.setAlwaysOnTop(false);
+    await windowManager.setSize(
+        isLowResolution ? const Size(800, 600) : const Size(1280, 860));
+    await windowManager.center();
+  }
+
+  static bool isSameSeason(DateTime d1, DateTime d2) {
+    return d1.year == d2.year && (d1.month - d2.month).abs() <= 2;
+  }
+
+  static Future<String> getPlayerTempPath() async {
+    final directory = await getTemporaryDirectory();
+    return directory.path;
+  }
+
+  static String buildShadersAbsolutePath(
+      String baseDirectory, List<String> shaders) {
+    List<String> absolutePaths = shaders.map((shader) {
+      return path.join(baseDirectory, shader);
+    }).toList();
+    if (Platform.isWindows) {
+      return absolutePaths.join(';');
+    }
+    return absolutePaths.join(':');
+  }
+
+  static String generateDandanSignature(String path, int timestamp) {
+    String id = mortis['id']!;
+    String value = mortis['value']!;
+    String data = id + timestamp.toString() + path + value;
+    var bytes = utf8.encode(data);
+    var digest = sha256.convert(bytes);
+    return base64Encode(digest.bytes);
+  }
+
+  /// 格式化日期
+  static String formatDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateString;
+    }
+  }
+
+  /// 计算文件的 SHA256 哈希值
+  static Future<String> calculateFileHash(File file) async {
+    final bytes = await file.readAsBytes();
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
+  /// 销毁播放器菜单
+  static Future<void> disposePlayerMenu() async {
+    if (!Platform.isMacOS) return;
+    const MethodChannel appmenu = MethodChannel("com.predidit.kazumi/appmenu");
+    await appmenu.invokeMethod("setMenuEnabled", {
+      "menu": "PlayerMenu",
+      "enable": false,
+    });
+  }
+
+  /// 初始化播放器菜单
+  static Future<void> initPlayerMenu(
+      Map<String, void Function()> actions) async {
+    if (!Platform.isMacOS) return;
+    const MethodChannel appmenu = MethodChannel("com.predidit.kazumi/appmenu");
+    await appmenu.invokeMethod("setMenuEnabled", {
+      "menu": "PlayerMenu",
+      "enable": true,
+    });
+    appmenu.setMethodCallHandler((call) async {
+      final action = actions[call.method];
+      action?.call();
+    });
   }
 }
