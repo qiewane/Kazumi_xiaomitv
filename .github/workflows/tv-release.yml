@@ -19,30 +19,34 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
       
-      # 关键修复：设置 cache: false，确保每次使用干净的 Flutter 环境
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.38.9'
           channel: 'stable'
-          cache: false  # 改动1：禁用缓存，避免残留损坏的 pub 包
+          cache: false
       
       - name: Clean Flutter
         run: flutter clean
       
-      # 关键修复：精准清理损坏的 hive_ce_flutter 包，而非全部缓存（节省时间）
-      - name: Clean Hive Cache
+      # 关键修复：强制 Pub 重新安装 hive_ce_flutter（删除其 package_config.json 记录）
+      - name: Force Reinstall hive_ce_flutter
         run: |
+          # 删除全局缓存中的包实体
           rm -rf ~/.pub-cache/hosted/pub.dev/hive_ce_flutter-*
-          rm -rf ~/.pub-cache/git/hive_ce_flutter*
+          # 删除项目中的 package_config.json（强制重新解析所有依赖）
+          rm -f .dart_tool/package_config.json
+          rm -f pubspec.lock
       
       - name: Get dependencies
         run: |
           flutter pub get
-          # 验证关键文件确实存在（调试用途，构建失败时会看到）
-          test -f ~/.pub-cache/hosted/pub.dev/hive_ce_flutter-2.3.3/lib/hive_ce_flutter.dart || {
-            echo "::error::hive_ce_flutter 包文件缺失" && exit 1;
-          }
+          # 强制验证：如果仍不存在，手动添加
+          if [ ! -f ~/.pub-cache/hosted/pub.dev/hive_ce_flutter-*/lib/hive_ce_flutter.dart ]; then
+            echo "Retrying hive_ce_flutter installation..."
+            flutter pub add hive_ce_flutter:^2.3.3
+            flutter pub get
+          fi
       
       - name: Build armeabi-v7a APK
         run: |
