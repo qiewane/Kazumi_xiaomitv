@@ -18,6 +18,7 @@
         android:enableOnBackInvokedCallback="true"
         android:hardwareAccelerated="true">
         
+        <!-- TV 主 Activity：强制横屏，无问题属性 -->
         <activity
             android:name="com.predidit.kazumi.MainActivity"
             android:exported="true"
@@ -25,8 +26,7 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:windowSoftInputMode="adjustResize"
-            android:screenOrientation="landscape"
-            android:preferredDisplayModeId="0">
+            android:screenOrientation="landscape">
             
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
