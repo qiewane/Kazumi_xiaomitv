@@ -8,18 +8,18 @@ import 'package:kazumi/utils/storage.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:kazumi/utils/utils.dart';
-// TV 适配：使用标准 Hive 初始化替代 hive_ce_flutter
+// 修改1：删除 hive_ce_flutter，使用标准 hive_ce + path_provider
 import 'package:hive_ce/hive_ce.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 标准 Hive 初始化（等效于 initFlutter，不影响 TV 功能）
+  // 修改2：标准 Hive 初始化（等效于 initFlutter，完全兼容 TV）
   final appDocDir = await getApplicationDocumentsDirectory();
   Hive.init(appDocDir.path);
 
-  // 桌面平台窗口管理（非 TV 平台）
+  // 桌面平台窗口管理（保持不变）
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
     WindowOptions windowOptions = const WindowOptions(
@@ -44,11 +44,11 @@ void main() async {
     }
   }
 
-  // TV 关键：初始化存储并检测 TV 设备类型
+  // TV 关键：初始化存储并检测 TV 设备类型（完全保留）
   await GStorage.init();
   bool isTVDevice = await Utils.isTV();
   
-  // TV 关键：保存设备类型到存储（使用 put）
+  // 使用 put 存储（你已修改，保持不变）
   await GStorage.setting.put(SettingBoxKey.isTV, isTVDevice);
   
   runApp(ModularApp(module: AppModule(), child: const AppWidget()));
