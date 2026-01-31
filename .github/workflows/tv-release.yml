@@ -32,16 +32,11 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
       
-      # 关键步骤：使用现有图标生成 TV Banner
-      - name: Prepare TV Banner from existing icon
+      - name: Prepare TV Banner
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
           mkdir -p android/app/src/main/res/drawable-xhdpi
-          mkdir -p android/app/src/main/res/drawable-xxhdpi
           convert assets/images/logo/logo_android.png -resize 320x180! android/app/src/main/res/drawable-xhdpi/ic_banner.png
-          convert assets/images/logo/logo_android.png -resize 640x360! android/app/src/main/res/drawable-xxhdpi/ic_banner.png
-          echo "TV Banner created successfully:"
-          ls -la android/app/src/main/res/drawable-*/ic_banner.png
       
       - name: Build armeabi-v7a APK
         run: flutter build apk --target-platform=android-arm --release
@@ -50,13 +45,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kazumi-tv-armeabi-v7a
-          path: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk  # 正确的文件名
       
       - name: Create Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v1
         with:
-          files: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+          files: build/app/outputs/flutter-apk/app-release.apk  # 正确的文件名
           tag_name: tv-v1.0.${{ github.run_number }}
           name: Kazumi TV v1.0.${{ github.run_number }}
           body: |
