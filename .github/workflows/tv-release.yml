@@ -37,6 +37,17 @@ jobs:
           sudo apt-get update && sudo apt-get install -y imagemagick
           mkdir -p android/app/src/main/res/drawable-xhdpi
           convert assets/images/logo/logo_android.png -resize 320x180! android/app/src/main/res/drawable-xhdpi/ic_banner.png
+
+      - name: Fix AndroidManifest.xml
+        run: |
+          # 删除可能的特殊字符
+          sed -i 's/android"\\s*/android"/g' android/app/src/main/AndroidManifest.xml
+          sed -i 's/\\r$//' android/app/src/main/AndroidManifest.xml
+          # 验证文件
+          cat android/app/src/main/AndroidManifest.xml | head -5
+      
+      - name: Build armeabi-v7a APK
+        run: flutter build apk --target-platform=android-arm --release
       
       - name: Build armeabi-v7a APK
         run: flutter build apk --target-platform=android-arm --release
