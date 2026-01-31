@@ -41,7 +41,7 @@ class Utils {
   static bool isTV() {
     // 优先读取存储的标记
     try {
-      final storedValue = GStorage.getSetting(SettingBoxKey.isTV, defaultValue: false);
+      final storedValue = GStorage.setting.get(SettingBoxKey.isTV, defaultValue: false);
       if (storedValue == true) return true;
     } catch (e) {
       // 存储未初始化，继续检测
@@ -64,7 +64,7 @@ class Utils {
   /// 强制检测 TV 并保存结果（在 main.dart 初始化时调用）
   static Future<bool> detectTVDevice() async {
     if (!Platform.isAndroid) {
-      await GStorage.setSetting(SettingBoxKey.isTV, false);
+      await GStorage.setting.set(SettingBoxKey.isTV, false);
       return false;
     }
     
@@ -75,10 +75,10 @@ class Utils {
       final size = data.size;
       
       isTVDevice = size.shortestSide > 600 && size.width > size.height;
-      await GStorage.setSetting(SettingBoxKey.isTV, isTVDevice);
+      await GStorage.setting.set(SettingBoxKey.isTV, isTVDevice);
     } catch (e) {
       isTVDevice = false;
-      await GStorage.setSetting(SettingBoxKey.isTV, false);
+      await GStorage.setting.set(SettingBoxKey.isTV, false);
     }
     
     return isTVDevice;
