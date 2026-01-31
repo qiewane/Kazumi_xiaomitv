@@ -64,7 +64,7 @@ class Utils {
   /// 强制检测 TV 并保存结果（在 main.dart 初始化时调用）
   static Future<bool> detectTVDevice() async {
     if (!Platform.isAndroid) {
-      await GStorage.setting.set(SettingBoxKey.isTV, false);
+      await GStorage.setting.put(SettingBoxKey.isTV, false);
       return false;
     }
     
@@ -75,10 +75,10 @@ class Utils {
       final size = data.size;
       
       isTVDevice = size.shortestSide > 600 && size.width > size.height;
-      await GStorage.setting.set(SettingBoxKey.isTV, isTVDevice);
+      await GStorage.setting.put(SettingBoxKey.isTV, isTVDevice);
     } catch (e) {
       isTVDevice = false;
-      await GStorage.setting.set(SettingBoxKey.isTV, false);
+      await GStorage.setting.put(SettingBoxKey.isTV, false);
     }
     
     return isTVDevice;
