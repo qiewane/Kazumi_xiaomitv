@@ -6,7 +6,8 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/bean/settings/theme_provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:kazumi/utils/storage.dart';
-import 'package:hive_ce_flutter/hive_ce_flutter.dart';
+import 'package:hive_ce/hive_ce.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:kazumi/request/request.dart';
 import 'package:kazumi/utils/proxy_manager.dart';
 import 'package:flutter/services.dart';
@@ -19,7 +20,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
+  // 替换 Hive.initFlutter()：
+  // 关键修复：使用标准 path_provider 初始化，不依赖损坏的 hive_ce_flutter
+  final appDocDir = await getApplicationDocumentsDirectory();
+  Hive.init(appDocDir.path);
   MediaKit.ensureInitialized();
   
   // TV 适配：检测 TV 设备并强制横屏（必须在其他初始化之前）
