@@ -32,6 +32,17 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
       
+      # 关键步骤：使用现有图标生成 TV Banner
+      - name: Prepare TV Banner from existing icon
+        run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
+          mkdir -p android/app/src/main/res/drawable-xhdpi
+          mkdir -p android/app/src/main/res/drawable-xxhdpi
+          convert assets/images/logo/logo_android.png -resize 320x180! android/app/src/main/res/drawable-xhdpi/ic_banner.png
+          convert assets/images/logo/logo_android.png -resize 640x360! android/app/src/main/res/drawable-xxhdpi/ic_banner.png
+          echo "TV Banner created successfully:"
+          ls -la android/app/src/main/res/drawable-*/ic_banner.png
+      
       - name: Build armeabi-v7a APK
         run: flutter build apk --target-platform=android-arm --release
       
@@ -52,8 +63,5 @@ jobs:
             ## TV 版更新
             - 适配 armeabi-v7a 架构（小米电视等 32 位设备）
             - 支持遥控器焦点导航
-            - 主页左侧菜单支持方向键操作
-            - 播放页下键打开菜单，左右键快进快退
-            - 适配小米电视输入法
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
