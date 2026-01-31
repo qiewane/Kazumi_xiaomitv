@@ -24,29 +24,13 @@ jobs:
         with:
           flutter-version: '3.38.9'
           channel: 'stable'
-          cache: false
+          cache: true  # 可以重新启用缓存
       
       - name: Clean Flutter
         run: flutter clean
       
-      # 关键修复：强制 Pub 重新安装 hive_ce_flutter（删除其 package_config.json 记录）
-      - name: Force Reinstall hive_ce_flutter
-        run: |
-          # 删除全局缓存中的包实体
-          rm -rf ~/.pub-cache/hosted/pub.dev/hive_ce_flutter-*
-          # 删除项目中的 package_config.json（强制重新解析所有依赖）
-          rm -f .dart_tool/package_config.json
-          rm -f pubspec.lock
-      
       - name: Get dependencies
-        run: |
-          flutter pub get
-          # 强制验证：如果仍不存在，手动添加
-          if [ ! -f ~/.pub-cache/hosted/pub.dev/hive_ce_flutter-*/lib/hive_ce_flutter.dart ]; then
-            echo "Retrying hive_ce_flutter installation..."
-            flutter pub add hive_ce_flutter:^2.3.3
-            flutter pub get
-          fi
+        run: flutter pub get
       
       - name: Build armeabi-v7a APK
         run: |
