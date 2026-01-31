@@ -24,7 +24,7 @@ jobs:
         with:
           flutter-version: '3.38.9'
           channel: 'stable'
-          cache: true  # 可以重新启用缓存
+          cache: true
       
       - name: Clean Flutter
         run: flutter clean
@@ -33,10 +33,7 @@ jobs:
         run: flutter pub get
       
       - name: Build armeabi-v7a APK
-        run: |
-          flutter build apk \
-            --target-platform=android-arm \
-            --release
+        run: flutter build apk --target-platform=android-arm --release
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
