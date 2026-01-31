@@ -17,48 +17,16 @@ import 'package:kazumi/pages/error/storage_error_page.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-/// TV 设备检测（基于屏幕尺寸）
-bool _detectTV() {
-  if (!Platform.isAndroid) return false;
-  // TV 检测逻辑：屏幕宽度大于 600 且为横屏
-  // 注意：实际运行时需在第一帧渲染后检测，此处为简化判断
-  // 更精确的检测可通过原生平台通道查询 FEATURE_LEANBACK
-  try {
-    final view = WidgetsBinding.instance.platformDispatcher.views.first;
-    final data = MediaQueryData.fromView(view);
-    return data.size.shortestSide > 600;
-  } catch (e) {
-    return false;
-  }
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   
-  // TV 检测与适配（必须在 runApp 前完成）
-  bool isTVDevice = false;
+  // TV 适配：检测 TV 设备并强制横屏（必须在其他初始化之前）
   if (Platform.isAndroid) {
-    isTVDevice = _detectTV();
-    if (isTVDevice) {
-      // TV 端强制横屏，禁用竖屏
-      await SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
-    } else {
-      // 移动端保持原有 edge-to-edge 设置
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-        systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarDividerColor: Colors.transparent,
-        statusBarColor: Colors.transparent,
-      ));
-    }
+    await _initTVMode();
   }
-
-  if (Platform.isIOS) {
-    // iOS 保持原有设置
+  
+  if (Platform.isAndroid || Platform.isIOS) {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       systemNavigationBarColor: Colors.transparent,
@@ -75,12 +43,15 @@ void main() async {
     await Hive.initFlutter(
         '${(await getApplicationSupportDirectory()).path}/hive');
     await GStorage.init();
+    
+    // TV 适配：保存 TV 标记到存储
+    if (Platform.isAndroid) {
+      await _saveTVMode();
+    }
   } catch (_) {
     if (Platform.isWindows) {
       await windowManager.ensureInitialized();
       windowManager.waitUntilReadyToShow(null, () async {
-        // Native window show has been blocked in `flutter_windows.cppL36` to avoid flickering.
-        // Without this. the window will never show on Windows.
         await windowManager.show();
         await windowManager.focus();
       });
@@ -108,7 +79,6 @@ void main() async {
       size: isLowResolution ? const Size(840, 600) : const Size(1280, 860),
       center: true,
       skipTaskbar: false,
-      // macOS always hide title bar regardless of showWindowButton setting
       titleBarStyle: (Platform.isMacOS || !showWindowButton)
           ? TitleBarStyle.hidden
           : TitleBarStyle.normal,
@@ -116,5 +86,56 @@ void main() async {
       title: 'Kazumi',
     );
     windowManager.waitUntilReadyToShow(windowOptions, () async {
-      // Native window show has been blocked in `flutter_windows.cppL36` to avoid flickering.
-      // Without this. the window will never show on
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
+  Request();
+  await Request.setCookie();
+  ProxyManager.applyProxy();
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: ModularApp(
+        module: AppModule(),
+        child: const AppWidget(),
+      ),
+    ),
+  );
+}
+
+// TV 适配：检测是否为 TV 设备并设置横屏
+Future<void> _initTVMode() async {
+  try {
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final data = MediaQueryData.fromView(view);
+    final size = data.size;
+    
+    // TV 判断逻辑：短边大于 600 且为横屏
+    bool isTVDevice = size.shortestSide > 600 && size.width > size.height;
+    
+    if (isTVDevice) {
+      // TV 强制横屏
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+  } catch (e) {
+    // 检测失败时静默处理
+    debugPrint('TV 检测失败: $e');
+  }
+}
+
+// TV 适配：保存 TV 标记到存储
+Future<void> _saveTVMode() async {
+  try {
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final data = MediaQueryData.fromView(view);
+    final size = data.size;
+    bool isTVDevice = size.shortestSide > 600 && size.width > size.height;
+    await GStorage.setSetting(SettingBoxKey.isTV, isTVDevice);
+  } catch (e) {
+    debugPrint('保存 TV 标记失败: $e');
+  }
+}
