@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.predidit.kazumi">  <!-- 添加这一行 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     
     <!-- TV 必需权限 -->
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -19,7 +18,7 @@
         android:enableOnBackInvokedCallback="true">
         
         <activity
-            android:name=".MainActivity"
+            android:name="com.predidit.kazumi.MainActivity"  <!-- 改为完整包名 -->
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
