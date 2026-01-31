@@ -19,6 +19,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
   MediaKit.ensureInitialized();
   
   // TV 适配：检测 TV 设备并强制横屏（必须在其他初始化之前）
