@@ -27,6 +27,11 @@ jobs:
           cache: true
       - name: Clean Flutter
         run: flutter clean
+        
+      - name: Clean Pub Cache
+        run: |
+          flutter pub cache clean
+          rm -rf ~/.pub-cache/hosted/pub.dev/hive_ce_flutter-*
       
       - name: Get dependencies
         run: flutter pub get
