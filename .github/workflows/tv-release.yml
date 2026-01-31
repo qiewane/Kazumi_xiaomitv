@@ -19,29 +19,36 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
       
+      # 关键修复：设置 cache: false，确保每次使用干净的 Flutter 环境
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.9'  # 升级到项目要求的最低版本
+          flutter-version: '3.38.9'
           channel: 'stable'
-          cache: true
+          cache: false  # 改动1：禁用缓存，避免残留损坏的 pub 包
+      
       - name: Clean Flutter
         run: flutter clean
-        
-      - name: Clean Pub Cache
+      
+      # 关键修复：精准清理损坏的 hive_ce_flutter 包，而非全部缓存（节省时间）
+      - name: Clean Hive Cache
         run: |
-          flutter pub cache clean
           rm -rf ~/.pub-cache/hosted/pub.dev/hive_ce_flutter-*
+          rm -rf ~/.pub-cache/git/hive_ce_flutter*
       
       - name: Get dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          # 验证关键文件确实存在（调试用途，构建失败时会看到）
+          test -f ~/.pub-cache/hosted/pub.dev/hive_ce_flutter-2.3.3/lib/hive_ce_flutter.dart || {
+            echo "::error::hive_ce_flutter 包文件缺失" && exit 1;
+          }
       
       - name: Build armeabi-v7a APK
         run: |
           flutter build apk \
             --target-platform=android-arm \
             --release
-          # 注意：删除了 --split-per-abi
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
