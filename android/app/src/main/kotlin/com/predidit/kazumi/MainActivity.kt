@@ -1,7 +1,7 @@
-package com.example.kazumi
+package com.predidit.kazumi  // 修改：从 com.example.kazumi 改为 com.predidit.kazumi
 
 import android.content.Intent
-import android.os.Build;
+import android.os.Build
 import android.net.Uri
 import android.os.Bundle
 import androidx.annotation.NonNull
