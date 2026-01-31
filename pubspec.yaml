@@ -19,7 +19,8 @@ dependencies:
   # TV 适配新增：遥控器焦点导航
   dpad: ^1.2.2
   focus_detector: ^2.0.1
-
+  hive_ce: ^2.16.0
+  hive_ce_flutter: ^2.3.3  # 添加这一行
   # 原有依赖保持不变
   cupertino_icons: ^1.0.6
   flutter_modular: ^6.3.4
@@ -29,8 +30,7 @@ dependencies:
   connectivity_plus: ^6.0.5
 
   path_provider: ^2.1.5
-  hive_ce: ^2.16.0
-  hive_ce_flutter: ^2.3.3
+
   cached_network_image: ^3.4.1
   card_settings_ui: ^2.0.1
 
