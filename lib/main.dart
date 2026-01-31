@@ -7,20 +7,19 @@ import 'package:flutter_modular/flutter_modular.dart';
 import 'package:kazumi/utils/storage.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
-import 'package:kazumi/utils/constans.dart';
 import 'package:kazumi/utils/utils.dart';
-// 关键修改1：删除 hive_ce_flutter，改为标准 hive_ce + path_provider
+// TV 适配：使用标准 Hive 初始化替代 hive_ce_flutter
 import 'package:hive_ce/hive_ce.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 关键修改2：替换 Hive.initFlutter() 为标准初始化
+  // 标准 Hive 初始化（等效于 initFlutter，不影响 TV 功能）
   final appDocDir = await getApplicationDocumentsDirectory();
   Hive.init(appDocDir.path);
 
-  // 桌面平台窗口管理（保持不变）
+  // 桌面平台窗口管理（非 TV 平台）
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
     WindowOptions windowOptions = const WindowOptions(
@@ -36,7 +35,7 @@ void main() async {
     });
   }
 
-  // Android 高刷新率（保持不变）
+  // TV 平台：设置高刷新率（小米电视支持）
   if (Platform.isAndroid) {
     try {
       await FlutterDisplayMode.setHighRefreshRate();
@@ -45,11 +44,11 @@ void main() async {
     }
   }
 
-  // 初始化存储（保持不变）
+  // TV 关键：初始化存储并检测 TV 设备类型
   await GStorage.init();
   bool isTVDevice = await Utils.isTV();
   
-  // 关键修改3：确保使用 put（你已完成，保持即可）
+  // TV 关键：保存设备类型到存储（使用 put）
   await GStorage.setting.put(SettingBoxKey.isTV, isTVDevice);
   
   runApp(ModularApp(module: AppModule(), child: const AppWidget()));
