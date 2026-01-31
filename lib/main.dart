@@ -134,7 +134,7 @@ Future<void> _saveTVMode() async {
     final data = MediaQueryData.fromView(view);
     final size = data.size;
     bool isTVDevice = size.shortestSide > 600 && size.width > size.height;
-    await GStorage.setting.set(SettingBoxKey.isTV, isTVDevice);
+    await GStorage.setting.put(SettingBoxKey.isTV, isTVDevice);
   } catch (e) {
     debugPrint('保存 TV 标记失败: $e');
   }
